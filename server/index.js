@@ -448,6 +448,49 @@ app.get('/api/products', requireAuth, allow('admin', 'owner'), async (req, res) 
     res.status(500).json({ error: 'Unable to fetch products' });
   }
 });
+// CREATE NEW PRODUCT app.post('/api/products', requireAuth, allow('admin', 'owner'), async (req, res) => { try { const { sku, name, category, unit, price, shelfLife, line, gst } = req.body || {};
+
+const cleanSku = String(sku || '').trim().toUpperCase();
+const cleanName = String(name || '').trim();
+const amount = Number(price);
+
+if (!cleanSku || !cleanName || !category || !unit || !Number.isFinite(amount) || amount < 0) {
+  return res.status(400).json({
+    error: 'SKU, product name, category, unit and a valid price are required.'
+  });
+}
+
+const products = await store.list('products');
+
+if (products.some(p => String(p.sku || '').toUpperCase() === cleanSku)) {
+  return res.status(409).json({
+    error: 'A product with this SKU already exists.'
+  });
+}
+
+const product = {
+  id: await store.nextSequence('products', 'p-', 5),
+  sku: cleanSku,
+  name: cleanName,
+  category: String(category).trim(),
+  unit: String(unit).trim(),
+  price: Math.round(amount * 100) / 100,
+  shelfLife: Math.max(0, Number(shelfLife) || 0),
+  line: String(line || 'General').trim(),
+  gst: Math.max(0, Number(gst) || 0),
+  status: 'active',
+  createdAt: new Date().toISOString()
+};
+
+await store.insert('products', product);
+
+res.status(201).json({ product });
+} catch (err) { console.error('[products/create]', err);
+
+res.status(500).json({
+  error: 'Unable to create product right now.'
+});
+} });
 app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint not found' }));
 
 store.init().then(() => {
