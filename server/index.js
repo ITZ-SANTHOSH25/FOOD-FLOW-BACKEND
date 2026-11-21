@@ -448,49 +448,60 @@ app.get('/api/products', requireAuth, allow('admin', 'owner'), async (req, res) 
     res.status(500).json({ error: 'Unable to fetch products' });
   }
 });
-// CREATE NEW PRODUCT app.post('/api/products', requireAuth, allow('admin', 'owner'), async (req, res) => { try { const { sku, name, category, unit, price, shelfLife, line, gst } = req.body || {};
+// CREATE NEW PRODUCT
+app.post('/api/products', requireAuth, allow('admin', 'owner'), async (req, res) => {
+  try {
+    const { sku, name, category, unit, price, shelfLife, line, gst } = req.body || {};
 
-const cleanSku = String(sku || '').trim().toUpperCase();
-const cleanName = String(name || '').trim();
-const amount = Number(price);
+    const cleanSku = String(sku ?? '').trim().toUpperCase();
+    const cleanName = String(name ?? '').trim();
+    const cleanCategory = String(category ?? '').trim();
+    const cleanUnit = String(unit ?? '').trim();
+    const amount = price === '' || price == null ? NaN : Number(price);
 
-if (!cleanSku || !cleanName || !category || !unit || !Number.isFinite(amount) || amount < 0) {
-  return res.status(400).json({
-    error: 'SKU, product name, category, unit and a valid price are required.'
-  });
-}
+    if (!cleanSku || !cleanName || !cleanCategory || !cleanUnit || !Number.isFinite(amount) || amount < 0) {
+      return res.status(400).json({
+        error: 'SKU, product name, category, unit, and a valid non-negative price are required.'
+      });
+    }
 
-const products = await store.list('products');
+    const parsedShelfLife = shelfLife === '' || shelfLife == null ? 0 : Number(shelfLife);
+    const parsedGst = gst === '' || gst == null ? 0 : Number(gst);
 
-if (products.some(p => String(p.sku || '').toUpperCase() === cleanSku)) {
-  return res.status(409).json({
-    error: 'A product with this SKU already exists.'
-  });
-}
+    if (!Number.isFinite(parsedShelfLife) || parsedShelfLife < 0) {
+      return res.status(400).json({ error: 'Shelf life must be a valid non-negative number.' });
+    }
 
-const product = {
-  id: await store.nextSequence('products', 'p-', 5),
-  sku: cleanSku,
-  name: cleanName,
-  category: String(category).trim(),
-  unit: String(unit).trim(),
-  price: Math.round(amount * 100) / 100,
-  shelfLife: Math.max(0, Number(shelfLife) || 0),
-  line: String(line || 'General').trim(),
-  gst: Math.max(0, Number(gst) || 0),
-  status: 'active',
-  createdAt: new Date().toISOString()
-};
+    if (!Number.isFinite(parsedGst) || parsedGst < 0 || parsedGst > 100) {
+      return res.status(400).json({ error: 'GST must be a valid percentage between 0 and 100.' });
+    }
 
-await store.insert('products', product);
+    const products = await store.list('products');
+    if (products.some(p => String(p.sku ?? '').trim().toUpperCase() === cleanSku)) {
+      return res.status(409).json({ error: 'A product with this SKU already exists.' });
+    }
 
-res.status(201).json({ product });
-} catch (err) { console.error('[products/create]', err);
+    const product = {
+      id: await store.nextSequence('products', 'p-', 5),
+      sku: cleanSku,
+      name: cleanName,
+      category: cleanCategory,
+      unit: cleanUnit,
+      price: Math.round((amount + Number.EPSILON) * 100) / 100,
+      shelfLife: Math.floor(parsedShelfLife),
+      line: String(line ?? '').trim() || 'General',
+      gst: Math.round((parsedGst + Number.EPSILON) * 100) / 100,
+      status: 'active',
+      createdAt: new Date().toISOString()
+    };
 
-res.status(500).json({
-  error: 'Unable to create product right now.'
+    await store.insert('products', product);
+    return res.status(201).json({ product });
+  } catch (err) {
+    console.error('[products/create]', err);
+    return res.status(500).json({ error: 'Unable to create product right now.' });
+  }
 });
-} });
 app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint not found' }));
 
 store.init().then(() => {
