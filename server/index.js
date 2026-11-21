@@ -312,7 +312,86 @@ function stockStatus(stock, reorder) {
   if (stock <= reorder) return 'low';
   return 'healthy';
 }
+// CREATE INVENTORY ITEM
+app.post('/api/inventory', requireAuth, allow('admin', 'owner'), async (req, res) => {
+  try {
+    const {
+      productId,
+      warehouse,
+      stock,
+      reorderLevel,
+      batch,
+      expiry,
+      unitCost
+    } = req.body || {};
 
+    if (!productId || !warehouse || !batch || !expiry) {
+      return res.status(400).json({
+        error: 'Please fill all required fields'
+      });
+    }
+
+    const product = await store.get('products', productId);
+
+    if (!product) {
+      return res.status(404).json({
+        error: 'Product not found'
+      });
+    }
+
+    const existing = await store.list('inventory');
+
+    const duplicate = existing.some(item =>
+      item.productId === productId &&
+      item.warehouse === warehouse &&
+      item.batch === batch
+    );
+
+    if (duplicate) {
+      return res.status(409).json({
+        error: 'This inventory batch already exists'
+      });
+    }
+
+    const quantity = Number(stock);
+    const reorder = Number(reorderLevel);
+
+    if (!Number.isFinite(quantity) || quantity < 0 ||
+        !Number.isFinite(reorder) || reorder < 0) {
+      return res.status(400).json({
+        error: 'Invalid stock quantity'
+      });
+    }
+
+    const item = {
+      id: await store.nextSequence('inventory', 'inv-', 5),
+      productId: product.id,
+      sku: product.sku,
+      name: product.name,
+      category: product.category,
+      unit: product.unit,
+      stock: quantity,
+      reorderLevel: reorder,
+      batch: String(batch).trim(),
+      warehouse: String(warehouse).trim(),
+      expiry: String(expiry),
+      unitCost: Number(unitCost) || product.price,
+      status: stockStatus(quantity, reorder),
+      updatedAt: new Date().toISOString()
+    };
+
+    await store.insert('inventory', item);
+
+    res.status(201).json({ item });
+
+  } catch (error) {
+    console.error('Inventory creation error:', error);
+
+    res.status(500).json({
+      error: 'Unable to create inventory item'
+    });
+  }
+});
 app.patch('/api/inventory/:id', requireAuth, allow('admin', 'production', 'owner'), async (req, res) => {
   const item = await store.get('inventory', req.params.id);
   if (!item) return res.status(404).json({ error: 'Inventory item not found' });
