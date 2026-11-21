@@ -9,6 +9,9 @@ const store = require('./store');
 const metrics = require('./metrics');
 
 const app = express();
+app.get("/", (req, res) => {
+    res.status(200).send("Backend is running successfully!");
+});
 const PORT = process.env.PORT || 5050;
 const JWT_SECRET = process.env.JWT_SECRET || 'foodflow-dev-secret-2026';
 const TOKEN_TTL = '12h';
