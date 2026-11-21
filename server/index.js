@@ -430,7 +430,24 @@ app.get(['/login', '/app'], (req, res) => {
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, mode: store.mode, time: new Date().toISOString() }));
+app.get('/api/version', (req, res) => {
+  res.json({
+    version: '1.0.1',
+    status: 'updated',
+    productsEndpoint: 'POST /api/products'
+  });
+});
 
+// GET ALL PRODUCTS
+app.get('/api/products', requireAuth, allow('admin', 'owner'), async (req, res) => {
+  try {
+    const products = await store.list('products');
+    res.json({ products });
+  } catch (error) {
+    console.error('Product fetch error:', error);
+    res.status(500).json({ error: 'Unable to fetch products' });
+  }
+});
 app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint not found' }));
 
 store.init().then(() => {
