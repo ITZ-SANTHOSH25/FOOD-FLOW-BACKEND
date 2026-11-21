@@ -10,7 +10,7 @@ const metrics = require('./metrics');
 
 const app = express();
 app.get("/", (req, res) => {
-    res.status(200).send("Backend is running successfully!");
+    res.status(200).send("Food Flow Backend is running successfully!");
 });
 const PORT = process.env.PORT || 5050;
 const JWT_SECRET = process.env.JWT_SECRET || 'foodflow-dev-secret-2026';
